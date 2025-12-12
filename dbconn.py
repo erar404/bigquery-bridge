@@ -14,7 +14,7 @@ class DbConn(object):
         """Class Init."""
         self.__bigquery_conn_str = self.get_bigquery_connection_string()
         self.__logger = logger
-        self.__connector = self.get_mssql_connector()
+        # self.__connector = self.get_mssql_connector()
         self.__mssql_engine = self.get_mssql_engine()
         
         # self.test_connections()
@@ -39,10 +39,10 @@ class DbConn(object):
         )
         return connector
     
-    def get_mssql_engine(self):
+    def get_mssql_engine2(self, connector=None):
         """Creates and returns a SQLAlchemy engine for MSSQL using Cloud SQL Connector."""
         try:
-            conn = self.__connector.connect(
+            conn = connector.connect(
                 config.mssql_instance,
                 "pytds",
                 user=config.mssql_user,
@@ -60,6 +60,28 @@ class DbConn(object):
         except Exception as e:
             self.__logger.error(f"Error creating MSSQL engine: {e}")
             raise e
+
+        return engine
+    
+    def get_mssql_engine(self):
+        connector = Connector()
+
+        def getconn():
+            conn = connector.connect(
+                config.mssql_instance,
+                driver="pytds",
+                user=config.mssql_user,
+                password=config.mssql_password,
+                db=config.mssql_database,
+            )
+            return conn
+
+        engine = sqlalchemy.create_engine(
+            "mssql+pytds://",
+            creator=getconn,
+            pool_pre_ping=True,
+            pool_recycle=300,
+        )
 
         return engine
 
@@ -83,5 +105,5 @@ class DbConn(object):
 
     def main(self):
         """Returns both connection strings as a tuple."""
-        self.test_bigquery_connection()
-        return self.__bigquery_conn_str, self.__mssql_engine
+        
+        return self.__mssql_engine

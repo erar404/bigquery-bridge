@@ -3,6 +3,7 @@ import logging
 from logger import LogHandler
 from datetime import datetime
 from dbconn import DbConn
+from core_functions.bigquery_to_mssql import BigQueryToMSSQL
 
 if __name__ == "__main__":
     # Set up logging
@@ -17,6 +18,10 @@ if __name__ == "__main__":
     # logger.info(f'MSSQL Conn: {mssql_conn_str}')
     # logger.info('------------------------')
     # logger.info(f'BQ Conn: {bigquery_conn_str}')
+
+    # Initialize The Main Function Class
+    bq_to_mssql = BigQueryToMSSQL(logger) 
+    bq_to_mssql.main()
 
     # Get current working directory
     cwd = os.getcwd()
