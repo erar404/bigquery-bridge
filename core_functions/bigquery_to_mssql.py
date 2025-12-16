@@ -4,7 +4,7 @@ import pandas_gbq
 import sqlalchemy
 from dbconn import DbConn
 from datetime import datetime
-from sqlalchemy import Column, Float, Integer, String, Table, MetaData, DateTime, Date
+from sqlalchemy import Column, Float, Integer, String, Table, MetaData, DateTime, Date, text
 
 
 class BigQueryToMSSQL(object):
@@ -17,21 +17,16 @@ class BigQueryToMSSQL(object):
         """Class Init."""
         self.__logger = logger
         self.__dbconn = DbConn(logger)
-        # self.__logger.info("Closing previous connectors.")
-        # self.__dbconn.close_mssql_connector()
         self.__bigquery_conn_str = self.__dbconn.get_bigquery_connection_string()
         self.__mssql_engine = self.__dbconn.main()
         self.__last_run_timestamp = None
 
     def __get_last_run_timestamp(self):
         """Get the last run timestamp from MSSQL table."""
-        # Example logic to get the last run timestamp
-        # connector  = self.__dbconn.get_mssql_connector()
-        # engine = self.__dbconn.get_mssql_engine(connector)
         try:
             with self.__mssql_engine.connect() as connection:
                 result = connection.execute(
-                    "SELECT MAX(update_date) FROM CustomerPOULBQ"
+                    text("SELECT MAX(updateDate) FROM CustomerPOULBQ")
                 )
                 self.__last_run_timestamp = result.scalar()
                 self.__logger.info(f"Last run timestamp: {self.__last_run_timestamp}")
@@ -42,10 +37,6 @@ class BigQueryToMSSQL(object):
 
     def __create_landing_tables(self):
         """Create necessary tables in MSSQL if they do not exist."""
-        # Example table creation logic
-        # connector  = self.__dbconn.get_mssql_connector()
-        # engine = self.__dbconn.get_mssql_engine(connector)
-
         inspector = sqlalchemy.inspect(self.__mssql_engine)
         metadata = sqlalchemy.MetaData()
         self.__logger.info("Creating landing tables if they do not exist...")
@@ -99,7 +90,6 @@ class BigQueryToMSSQL(object):
             else:
                 self.__logger.info("Table 'CustomerPOULDetailBQ' already exists. No action taken.")    
             
-            # connector.close()
         except Exception as e:
             self.__logger.error(f"Error creating tables: {e}")
             raise e
@@ -122,7 +112,13 @@ class BigQueryToMSSQL(object):
             elif table_name == 'CustomerPOULDetailBQ':
                 query = "SELECT * FROM `{}.stg_customer_po_ul_detail`".format(config.bigquery_dataset_id)
                 if self.__last_run_timestamp:
-                    query += f" WHERE update_date > '{self.__last_run_timestamp}'"
+                    query = """
+                    SELECT * FROM `{}.stg_customer_po_ul_detail` where po_ref_number IN (
+                        SELECT po_ref_number FROM `{}.stg_customer_po_ul` WHERE update_date > '{}'
+                    )
+                    """.format(config.bigquery_dataset_id, 
+                               config.bigquery_dataset_id,
+                               self.__last_run_timestamp)
                 
                 df = pandas_gbq.read_gbq(
                     query,
@@ -196,8 +192,6 @@ class BigQueryToMSSQL(object):
         customer_po_ul_detail_bq = self.__rename_columns('CustomerPOULDetailBQ', customer_po_ul_detail_bq)
         
         self.__logger.info("Inserting data into MSSQL...")
-        # connector = self.__dbconn.get_mssql_connector()
-        # engine = self.__dbconn.get_mssql_engine(connector)
         try:
             with self.__mssql_engine.begin() as connection:
                 customer_po_ul_bq.to_sql(
@@ -217,6 +211,4 @@ class BigQueryToMSSQL(object):
             self.__logger.error(f"Error inserting data into MSSQL: {e}")
             raise e
         
-        # connector.close()
-
         return retval
