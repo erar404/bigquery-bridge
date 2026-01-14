@@ -1,5 +1,6 @@
 import os
 import config
+import mapping
 import pandas_gbq
 import sqlalchemy
 from dbconn import DbConn
@@ -86,9 +87,22 @@ class BigQueryToMSSQL(object):
                     Column('netPrice', Float),
                     Column('cancelDate', Date),
                     Column('updateDate', Date),
-                )   
+                )
             else:
-                self.__logger.info("Table 'CustomerPOULDetailBQ' already exists. No action taken.")    
+                self.__logger.info("Table 'CustomerPOULDetailBQ' already exists. No action taken.")
+
+            if not inspector.has_table('DocumentAIBQ'):
+                metadata.create_all(self.__mssql_engine)
+                self.__logger.info("Table 'DocumentAIBQ' created successfully.")
+            else:
+                self.__logger.info("Table 'DocumentAIBQ' already exists. No action taken.")   
+
+            if not inspector.has_table('DocumentAIDetailBQ'):
+                metadata.create_all(self.__mssql_engine)
+                self.__logger.info("Table 'DocumentAIDetailBQ' created successfully.")    
+            else:
+                self.__logger.info("Table 'DocumentAIDetailBQ' already exists. No action taken.")
+                self.__get_last_run_timestamp()   
             
         except Exception as e:
             self.__logger.error(f"Error creating tables: {e}")
@@ -98,9 +112,9 @@ class BigQueryToMSSQL(object):
         """Get data from BigQuery based on last run timestamp."""
         try:
             if table_name == 'CustomerPOULBQ':
-                query = "SELECT * FROM `{}.stg_customer_po_ul`".format(config.bigquery_dataset_id)
+                query = "SELECT * FROM `{}.stg_document_ai`".format(config.bigquery_dataset_id)
                 if self.__last_run_timestamp:
-                    query += f" WHERE update_date > '{self.__last_run_timestamp}'"
+                    query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
                 
                 df = pandas_gbq.read_gbq(
                     query,
@@ -110,7 +124,8 @@ class BigQueryToMSSQL(object):
                 self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
                 return df
             elif table_name == 'CustomerPOULDetailBQ':
-                query = "SELECT * FROM `{}.stg_customer_po_ul_detail`".format(config.bigquery_dataset_id)
+                query = "SELECT * FROM `{}.stg_document_ai_detail`".format(config.bigquery_dataset_id)
+                
                 if self.__last_run_timestamp:
                     query = """
                     SELECT * FROM `{}.stg_customer_po_ul_detail` where po_ref_number IN (
@@ -127,51 +142,58 @@ class BigQueryToMSSQL(object):
                 )
                 self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
                 return df
+            elif table_name == 'DocumentAIBQ':
+                query = "SELECT * FROM `{}.stg_document_ai`".format(config.bigquery_dataset_id)
+                
+                if self.__last_run_timestamp:
+                    query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
+                
+                df = pandas_gbq.read_gbq(
+                    query,
+                    project_id=config.bigquery_project_id,
+                    dialect='standard'
+                )
+                self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
+                return df
+            elif table_name == 'DocumentAIDetailBQ':
+                query = "SELECT * FROM `{}.stg_document_ai_detail`".format(config.bigquery_dataset_id)
+                
+                if self.__last_run_timestamp:
+                    query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
+                
+                df = pandas_gbq.read_gbq(
+                    query,
+                    project_id=config.bigquery_project_id,
+                    dialect='standard'
+                )
+                self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
+                return df
         except Exception as e:
             self.__logger.error(f"Error fetching data from BigQuery: {e}")
             raise e
     
     def __rename_columns(self, table_name, df):
         """Rename columns in the DataFrame to match MSSQL table schema."""
-        column_mapping = { }
-        
-        if table_name == 'CustomerPOULBQ':
-            column_mapping = {
-                'customer_id': 'customerId',
-                'po_ref_number': 'poRefNumber',
-                'company_id': 'companyid',
-                'warehouse_id': 'warehouseid',
-                'po_date': 'poDate',
-                'delivery_date': 'deliveryDate',
-                'cancellation_date': 'cancellationDate',
-                'customer_branch_id': 'customerBranchId',
-                'customer_branch_name': 'customerBranchName',
-                'customer_branch_lookup_code': 'customerBranchLookUpCode',
-                'remark': 'remark',
-                'customer_po_id': 'customerPOId',
-                'po_status': 'poStatus',
-                'manual_encoded': 'manualEncoded',
-                'create_by': 'createBy',
-                'create_date': 'createDate',
-                'update_by': 'updateBy',
-                'update_date': 'updateDate',
-                'cancel_by': 'cancelBy',
-                'cancel_date': 'cancelDate',
-                'cancel_reason': 'cancelReason'
-            }
+        column_mapping = mapping.table_mapping.get(table_name, {})
+        ignore_cols = mapping.ignore_columns.get(table_name, [])
+        column_defaults = mapping.column_defaults.get(table_name, {})
+        requirements_cols = mapping.required_columns.get(table_name, [])
 
-        elif table_name == 'CustomerPOULDetailBQ':
-            column_mapping = {
-                'customer_id': 'customerId',
-                'po_ref_number': 'poRefNumber',
-                'product_id': 'productId',
-                'sku_id': 'skuId',
-                'customer_sku_code': 'customerSKUCode',
-                'customer_sku_desc': 'customerSKUDesc',
-                'unit_price': 'unitPrice',
-                'discount_percent': 'discountPercent',
-                'net_price': 'netPrice'
-            }
+        if not column_mapping:
+            self.__logger.warning(f"No column mapping found for table: {table_name}")
+            return df
+        
+        if ignore_cols:
+            df.drop(columns=ignore_cols, inplace=True)
+            
+            self.__logger.info(f"Removed Columns for {table_name}")
+
+        if requirements_cols:
+            self.__logger.info('Removing Duplicates for table: {}'.format(table_name))
+            df.drop_duplicates(requirements_cols, keep='last', inplace=True)
+
+        for key, val in column_defaults.items():
+            df[key] = df[key].mask(df[key].isnull(), val)
 
         return df.rename(columns=column_mapping)
         
@@ -179,18 +201,17 @@ class BigQueryToMSSQL(object):
         """Main method to return connection strings."""
         self.__logger.info("BigQuery to MSSQL Bridge initialized.")
         retval = ''
-
         self.__logger.info("Creating landing tables if not exist...")
-        self.__create_landing_tables()
+        # self.__create_landing_tables()        #   disabled. Tables are pre-created. Enable if dynamic creation is needed.
 
         self.__logger.info("Fetching data from BigQuery...")
-        customer_po_ul_bq = self.__get_biquery_data('CustomerPOULBQ')
-        customer_po_ul_detail_bq = self.__get_biquery_data('CustomerPOULDetailBQ')
+        customer_po_ul_bq = self.__get_biquery_data('DocumentAIBQ')
+        customer_po_ul_detail_bq = self.__get_biquery_data('DocumentAIDetailBQ')
         
         self.__logger.info("Renaming columns to match MSSQL schema...")
-        customer_po_ul_bq = self.__rename_columns('CustomerPOULBQ', customer_po_ul_bq)
-        customer_po_ul_detail_bq = self.__rename_columns('CustomerPOULDetailBQ', customer_po_ul_detail_bq)
-        
+        customer_po_ul_bq = self.__rename_columns('customerpoul_v2', customer_po_ul_bq)
+        customer_po_ul_detail_bq = self.__rename_columns('customerpouldetail_v2', customer_po_ul_detail_bq)
+
         self.__logger.info("Inserting data into MSSQL...")
         try:
             with self.__mssql_engine.begin() as connection:
@@ -200,6 +221,7 @@ class BigQueryToMSSQL(object):
                     if_exists='append',
                     index=False
                 )
+
                 customer_po_ul_detail_bq.to_sql(
                     'CustomerPOULDetailBQ',
                     con=connection,
