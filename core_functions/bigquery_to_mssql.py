@@ -203,6 +203,8 @@ class BigQueryToMSSQL(object):
         retval = ''
         self.__logger.info("Creating landing tables if not exist...")
         # self.__create_landing_tables()        #   disabled. Tables are pre-created. Enable if dynamic creation is needed.
+        self.__get_last_run_timestamp()
+        self.__logger.info(f"Last run timestamp obtained: {self.__last_run_timestamp}")
 
         self.__logger.info("Fetching data from BigQuery...")
         customer_po_ul_bq = self.__get_biquery_data('DocumentAIBQ')

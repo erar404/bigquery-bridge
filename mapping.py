@@ -103,6 +103,7 @@ ignore_columns = {
         'delivery_date',
         'po_date',
         'entities_json',
+        'md5_hash',
     ]
 }
 
