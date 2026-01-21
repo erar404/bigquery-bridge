@@ -87,7 +87,9 @@ ignore_columns = {
         'unit_price',
         'unit_price_pcs',
         'net_price',
+        'total_discount_percent',
         'entities_json',
+        'total_discount',
     ],
     'customerpouldetail_v2': [
         'event_id',
@@ -102,8 +104,10 @@ ignore_columns = {
         'po_ref_number_item',
         'delivery_date',
         'po_date',
-        'entities_json',
         'md5_hash',
+        'net_amount',
+        'net_price_pcs',
+        'unit_amount',
     ]
 }
 
@@ -134,4 +138,12 @@ required_columns = {
         'po_ref_number_primary', 
         'customer_sku_code'
     ]
+}
+
+date_columns = {
+    'customerpoul_v2': [
+        'po_date', 
+        'delivery_date', 
+        'cancellation_date'
+    ],
 }
