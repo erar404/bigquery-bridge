@@ -1,6 +1,7 @@
 import os
 import config
 import mapping
+import pandas
 import pandas_gbq
 import sqlalchemy
 from dbconn import DbConn
@@ -171,13 +172,15 @@ class BigQueryToMSSQL(object):
         except Exception as e:
             self.__logger.error(f"Error fetching data from BigQuery: {e}")
             raise e
-    
+        
+   
     def __rename_columns(self, table_name, df):
         """Rename columns in the DataFrame to match MSSQL table schema."""
         column_mapping = mapping.table_mapping.get(table_name, {})
         ignore_cols = mapping.ignore_columns.get(table_name, [])
         column_defaults = mapping.column_defaults.get(table_name, {})
         requirements_cols = mapping.required_columns.get(table_name, [])
+        date_cols = mapping.date_columns.get(table_name, [])
 
         if not column_mapping:
             self.__logger.warning(f"No column mapping found for table: {table_name}")
@@ -185,7 +188,6 @@ class BigQueryToMSSQL(object):
         
         if ignore_cols:
             df.drop(columns=ignore_cols, inplace=True)
-            
             self.__logger.info(f"Removed Columns for {table_name}")
 
         if requirements_cols:
@@ -194,6 +196,11 @@ class BigQueryToMSSQL(object):
 
         for key, val in column_defaults.items():
             df[key] = df[key].mask(df[key].isnull(), val)
+
+        for date_col in date_cols:
+            if date_col in df.columns:
+                df[date_col] = pandas.to_datetime(df[date_col], errors="raise", format='mixed', yearfirst=True, dayfirst=True)
+                df[date_col] = df[date_col].dt.strftime("%Y-%m-%d")
 
         return df.rename(columns=column_mapping)
         
