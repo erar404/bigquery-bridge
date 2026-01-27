@@ -48,27 +48,31 @@ class BigQueryToMSSQL(object):
                 customer_poul_bq = Table(
                     'CustomerPOULBQ',
                     metadata,
-                    Column('customerId', Integer, primary_key=True),
                     Column('poRefNumber', String(50), primary_key=True),
-                    Column('companyid', Integer),
-                    Column('warehouseid', Integer),
-                    Column('poDate', Date),
-                    Column('deliveryDate', Date),
-                    Column('cancellationDate', Date),
-                    Column('customerBranchId', Integer),
-                    Column('customerBranchName', String(250)),
-                    Column('customerBranchLookUpCode', String(50)),
-                    Column('remark', String(250)),
-                    Column('customerPOId', Integer),
-                    Column('poStatus', String(20)),
-                    Column('manualEncoded', Integer),
-                    Column('createBy', String(50)),
-                    Column('createDate', Date),
-                    Column('updateBy', String(50)),
-                    Column('updateDate', Date),
-                    Column('cancelBy', String(50)),
-                    Column('cancelDate', Date),
-                    Column('cancelReason', String(250)),
+                    Column('poRefNumberPrimary', String(50)),
+                    Column('poRefNumberCount', String(50)),
+                    Column('fileName', String(400)),
+                    Column('companyName', String(50)),
+                    Column('customerName', String(50), primary_key=True),
+                    Column('customerBranchName', String(400)),
+                    Column('createdAt', DateTime),
+                    Column('deliveryDate', DateTime),
+                    Column('poDate', DateTime),
+                    Column('cancellationDate', DateTime),
+                    Column('customerSKUCode', String(400)),
+                    Column('customerSKUDesc', String(400)),
+                    Column('poQty', String(400)),
+                    Column('poQtyPcs', String(400)),
+                    Column('unitPrice', String(250)),
+                    Column('unitPricePcs', String(250)),
+                    Column('netPrice', String(250)),
+                    Column('totalDiscount', String(250)),
+                    Column('totalDiscountPercent', String(250)),
+                    Column('totalGrossAmount', String(250)),
+                    Column('totalNetAmount', String(250)),
+                    Column('totalQuantity', String(250)),
+                    Column('remark', String(400)),
+                    Column('updateDate', DateTime)
                 )
             else:
                 self.__get_last_run_timestamp()
@@ -77,17 +81,26 @@ class BigQueryToMSSQL(object):
                 customer_poul_detail_bq = Table(
                     'CustomerPOULDetailBQ',
                     metadata,
-                    Column('customerId', Integer, primary_key=True),
                     Column('poRefNumber', String(50), primary_key=True),
-                    Column('productId', Integer),
-                    Column('skuId', Integer),
-                    Column('customerSKUCode', String(50)),
+                    Column('customerName', String(50), primary_key=True),
+                    Column('customerBranchName', String(50)),
+                    Column('createdAt', DateTime),
+                    Column('poDate', Date),
+                    Column('deliveryDate', Date),
+                    Column('lineIndex', Integer),
+                    Column('customerSKUCode', String(50), primary_key=True),
                     Column('customerSKUDesc', String(250)),
+                    Column('poQty', Float),
+                    Column('poQtyPcs', Float),
+                    Column('unitOfMeasurement', String(50)),
                     Column('unitPrice', Float),
-                    Column('discountPercent', Float),
+                    Column('unitPricePcs', Float),
+                    Column('unitAmount', Float),
+                    Column('netAmount', Float),
                     Column('netPrice', Float),
-                    Column('cancelDate', Date),
-                    Column('updateDate', Date),
+                    Column('netPricePcs', Float),
+                    Column('discountPercent', Float),
+                    Column('FileName', String(400))
                 )
             else:
                 self.__logger.info("Table 'CustomerPOULDetailBQ' already exists. No action taken.")
@@ -144,7 +157,7 @@ class BigQueryToMSSQL(object):
                 self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
                 return df
             elif table_name == 'DocumentAIBQ':
-                query = "SELECT * FROM `{}.stg_document_ai`".format(config.bigquery_dataset_id)
+                query = "SELECT * FROM `{}.int_document_ai`".format(config.bigquery_dataset_id)
                 
                 if self.__last_run_timestamp:
                     query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
@@ -157,7 +170,7 @@ class BigQueryToMSSQL(object):
                 self.__logger.info(f"Fetched {len(df)} records from BigQuery.")
                 return df
             elif table_name == 'DocumentAIDetailBQ':
-                query = "SELECT * FROM `{}.stg_document_ai_detail`".format(config.bigquery_dataset_id)
+                query = "SELECT * FROM `{}.int_document_ai_detail`".format(config.bigquery_dataset_id)
                 
                 if self.__last_run_timestamp:
                     query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
@@ -209,7 +222,7 @@ class BigQueryToMSSQL(object):
         self.__logger.info("BigQuery to MSSQL Bridge initialized.")
         retval = ''
         self.__logger.info("Creating landing tables if not exist...")
-        # self.__create_landing_tables()        #   disabled. Tables are pre-created. Enable if dynamic creation is needed.
+        self.__create_landing_tables()        #   disabled. Tables are pre-created. Enable if dynamic creation is needed.
         self.__get_last_run_timestamp()
         self.__logger.info(f"Last run timestamp obtained: {self.__last_run_timestamp}")
 
@@ -218,8 +231,8 @@ class BigQueryToMSSQL(object):
         customer_po_ul_detail_bq = self.__get_biquery_data('DocumentAIDetailBQ')
         
         self.__logger.info("Renaming columns to match MSSQL schema...")
-        customer_po_ul_bq = self.__rename_columns('customerpoul_v2', customer_po_ul_bq)
-        customer_po_ul_detail_bq = self.__rename_columns('customerpouldetail_v2', customer_po_ul_detail_bq)
+        customer_po_ul_bq = self.__rename_columns('customerpoul_v4', customer_po_ul_bq)
+        customer_po_ul_detail_bq = self.__rename_columns('customerpouldetail_v4', customer_po_ul_detail_bq)
 
         self.__logger.info("Inserting data into MSSQL...")
         try:
