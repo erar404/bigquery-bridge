@@ -4,8 +4,9 @@ import mapping
 import pandas
 import pandas_gbq
 import sqlalchemy
+import pytz
 from dbconn import DbConn
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import Column, Float, Integer, String, Table, MetaData, DateTime, Date, text
 
 
@@ -28,10 +29,12 @@ class BigQueryToMSSQL(object):
         try:
             with self.__mssql_engine.connect() as connection:
                 result = connection.execute(
-                    text("SELECT MAX(updateDate) FROM CustomerPOULBQ")
+                    text("SELECT MAX(createdAt) FROM CustomerPOULBQ")
                 )
                 self.__last_run_timestamp = result.scalar()
-                self.__logger.info(f"Last run timestamp: {self.__last_run_timestamp}")
+                if self.__last_run_timestamp:
+                    self.__last_run_timestamp = self.__last_run_timestamp + timedelta(hours=1)
+                self.__logger.info(f"Last run timestamp (in UTC): {self.__last_run_timestamp}")
             
         except Exception as e:
             self.__logger.error(f"Error fetching last run timestamp: {e}")
@@ -100,7 +103,6 @@ class BigQueryToMSSQL(object):
                     Column('netPrice', Float),
                     Column('netPricePcs', Float),
                     Column('discountPercent', Float),
-                    Column('FileName', String(400))
                 )
             else:
                 self.__logger.info("Table 'CustomerPOULDetailBQ' already exists. No action taken.")
@@ -173,7 +175,12 @@ class BigQueryToMSSQL(object):
                 query = "SELECT * FROM `{}.int_document_ai_detail`".format(config.bigquery_dataset_id)
                 
                 if self.__last_run_timestamp:
-                    query += f" WHERE created_at  > '{self.__last_run_timestamp}'"
+                    query += """
+                        where po_ref_number IN (
+                        SELECT po_ref_number FROM `{}.int_document_ai` WHERE created_at > '{}'
+                    )
+                    """.format(config.bigquery_dataset_id,
+                               self.__last_run_timestamp)
                 
                 df = pandas_gbq.read_gbq(
                     query,
@@ -212,7 +219,7 @@ class BigQueryToMSSQL(object):
 
         for date_col in date_cols:
             if date_col in df.columns:
-                df[date_col] = pandas.to_datetime(df[date_col], errors="raise", format='mixed', yearfirst=True, dayfirst=True)
+                df[date_col] = pandas.to_datetime(df[date_col], errors="coerce", format='mixed', yearfirst=True, dayfirst=True)
                 df[date_col] = df[date_col].dt.strftime("%Y-%m-%d")
 
         return df.rename(columns=column_mapping)

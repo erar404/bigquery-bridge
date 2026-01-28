@@ -92,14 +92,7 @@ table_mapping = {
         'created_at' : 'createdAt',
         'delivery_date': 'deliveryDate',
         'po_date': 'poDate',
-        'cancellation_date': 'cancellationDate', 
-        'customer_sku_code': 'customerSKUCode',
-        'customer_sku_desc': 'customerSKUDesc',
-        'po_qty': 'poQty',
-        'po_qty_pcs': 'poQtyPcs',
-        'unit_price': 'unitPrice',
-        'unit_price_pcs': 'unitPricePcs',
-        'net_price': 'netPrice',
+        'cancellation_date': 'cancellationDate',
         'total_discount': 'totalDiscount',
         'total_discount_percent': 'totalDiscountPercent',
         'total_gross_amount': 'totalGrossAmount',
@@ -108,10 +101,9 @@ table_mapping = {
         'remark': 'remark',
     },
     'customerpouldetail_v4': {
-        'po_ref_number_primary': 'poRefNumber',
+        'po_ref_number': 'poRefNumber',
         'customer_name': 'customerName',
         'customer_branch_name': 'customerBranchName',
-        'created_at': 'createdAt',
         'po_date': 'poDate',
         'delivery_date': 'deliveryDate',
         'line_index': 'lineIndex',
@@ -127,7 +119,7 @@ table_mapping = {
         'net_price': 'netPrice',
         'net_price_pcs': 'netPricePcs',
         'discount_percent': 'discountPercent',
-    }
+    },
 }
 
 ignore_columns = {
@@ -206,6 +198,7 @@ ignore_columns = {
     ],
     'customerpouldetail_v4': [
         'file_name',
+        'page_index'
     ]
 }
 
@@ -279,7 +272,7 @@ required_columns = {
     ],
     'customerpouldetail_v4': [
         'customer_name', 
-        'po_ref_number_primary', 
+        'po_ref_number', 
         'customer_sku_code'
     ]
 }
@@ -305,7 +298,6 @@ date_columns = {
 original_columns = {
     'customerpoul_v4': [
         'po_ref_number',
-        'po_ref_number_primary',
         'po_ref_number_count',
         'company_name',
         'customer_name',
